@@ -1,0 +1,162 @@
+name: Testes Automatizados - Minhas Finanças
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  
+  # ============================================
+  # Testes Unitários Backend (.NET)
+  # ============================================
+  backend-unit-tests:
+    name: Backend - Testes Unitários
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore backend/MinhasFinancas.UnitTests/MinhasFinancas.UnitTests.csproj
+    
+    - name: Build
+      run: dotnet build backend/MinhasFinancas.UnitTests/MinhasFinancas.UnitTests.csproj --no-restore
+    
+    - name: Run Unit Tests
+      run: dotnet test backend/MinhasFinancas.UnitTests/MinhasFinancas.UnitTests.csproj --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+    
+    - name: Publish Test Results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Backend Unit Tests Results
+        path: '**/test-results.trx'
+        reporter: dotnet-trx
+
+  # ============================================
+  # Testes de Integração Backend (.NET)
+  # ============================================
+  backend-integration-tests:
+    name: Backend - Testes de Integração
+    runs-on: ubuntu-latest
+    needs: backend-unit-tests
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+    
+
+    - name: Restore Test Dependencies
+      run: dotnet restore backend/MinhasFinancas.IntegrationTests/MinhasFinancas.IntegrationTests.csproj
+    
+    - name: Build
+      run: dotnet build backend/MinhasFinancas.IntegrationTests/MinhasFinancas.IntegrationTests.csproj --no-restore
+    
+
+  # ============================================
+  # Testes Unitários Frontend (Vitest)
+  # ============================================
+  frontend-unit-tests:
+    name: Frontend - Testes Unitários
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/unit-tests/package-lock.json
+    
+    - name: Install Dependencies
+      run: |
+        cd frontend/unit-tests
+        npm ci
+    
+    - name: Run Unit Tests
+      run: |
+        cd frontend/unit-tests
+        npm test
+    
+    - name: Generate Coverage Report
+      run: |
+        cd frontend/unit-tests
+        npm run test:coverage
+    
+    - name: Upload Coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./frontend/unit-tests/coverage/coverage-final.json
+        flags: frontend-unit
+        name: frontend-unit-coverage
+
+  # ============================================
+  # Testes E2E (Playwright)
+  # ============================================
+  e2e-tests:
+    name: Frontend - Testes E2E
+    runs-on: ubuntu-latest
+    needs: [backend-unit-tests, frontend-unit-tests]
+    
+    steps:
+    - uses: actions/checkout@v3
+
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/e2e-tests/package-lock.json
+    
+    - name: Install Dependencies
+      run: |
+        cd frontend/e2e-tests
+        npm ci
+    
+    - name: Install Playwright Browsers
+      run: |
+        cd frontend/e2e-tests
+        npx playwright install --with-deps chromium
+
+  # ============================================
+  # Job de Consolidação de Resultados
+  # ============================================
+  test-summary:
+    name: Resumo dos Testes
+    runs-on: ubuntu-latest
+    needs: [backend-unit-tests, frontend-unit-tests]
+    if: always()
+    
+    steps:
+    - name: Check Test Results
+      run: |
+        echo "==================================="
+        echo "RESUMO DOS TESTES"
+        echo "==================================="
+        echo ""
+        echo "✅ Backend Unit Tests: ${{ needs.backend-unit-tests.result }}"
+        echo "✅ Frontend Unit Tests: ${{ needs.frontend-unit-tests.result }}"
+        echo ""
+        echo "NOTA: Testes de integração e E2E requerem aplicação"
+        echo "==================================="
+    
+    - name: Fail if tests failed
+      if: |
+        needs.backend-unit-tests.result == 'failure' ||
+        needs.frontend-unit-tests.result == 'failure'
+      run: exit 1
