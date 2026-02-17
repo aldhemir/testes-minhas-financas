@@ -337,5 +337,3 @@ Consulte [BUGS_ENCONTRADOS.md](./docs/BUGS_ENCONTRADOS.md) para lista completa e
 3. **Cascade delete precisa validação** 🔍
    - Configuração parece correta mas não foi testada contra app real
    - É área crítica que merece atenção
-#   t e s t e s - m i n h a s - f i n a n c a s  
- 
